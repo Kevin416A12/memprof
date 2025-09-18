@@ -11,6 +11,7 @@ int main() {
     ptr = new int;
     *ptr = 7;
     std::cout << "Valor de ptr: " << *ptr << "\n";
+    int* punteroArray = new int[5];
+    delete[] punteroArray;
     delete ptr;
-    
 }
