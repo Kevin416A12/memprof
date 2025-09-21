@@ -1,12 +1,24 @@
-cmake_minimum_required(VERSION 4.0)
-project(memprof)
+cmake_minimum_required(VERSION 3.16)
+project(memprof LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(.)
+# Incluye TODOS los .cpp que haya en src/memproflib/
+file(GLOB MEMPROF_SRCS CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/src/memproflib/*.cpp")
 
-add_library(memproflib memproflib.cpp memproflib.h)
+add_library(memproflib STATIC ${MEMPROF_SRCS})
+target_include_directories(memproflib PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
-add_executable(memprof main.cpp)
+# Winsock en Windows
+if (WIN32)
+    target_link_libraries(memproflib ws2_32)
+endif()
 
-target_link_libraries(memprof memproflib)
+# Ejecutables de ejemplo
+add_executable(demo_ok   ${CMAKE_SOURCE_DIR}/src/main_demo_ok.cpp)
+target_link_libraries(demo_ok memproflib)
+
+add_executable(demo_leak ${CMAKE_SOURCE_DIR}/src/main_demo_leak.cpp)
+target_link_libraries(demo_leak memproflib)
