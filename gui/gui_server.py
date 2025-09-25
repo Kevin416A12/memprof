@@ -113,6 +113,7 @@ class ReceiverThread(threading.Thread):
                 buf = b""
                 while True:
                     data = conn.recv(4096)
+                    print(data)
                     if not data:
                         break
                     buf += data

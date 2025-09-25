@@ -1,28 +1,19 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <sstream>
+
+#define HOOKS_ENABLE_FILELINE   // <<--- ACTIVA el macro para este TU
+#include "memproflib/Hooks.h"              // <<--- Debe venir DESPUÉS del define
+
 #include "memproflib/Tracker.h"
+#include "memproflib/SocketClienteTest.h"
 
 int main() {
-    std::cout << "Demo OK start\n";
+    Tracker tracker;
+    int* singleInt = new int[10000000];               // ahora pasa (file,line) desde ESTE archiv
+    delete singleInt;                        // idem
 
-    // Asignación simple
-    int* a = new int(42);
-    delete a;
-
-    // Varias asignaciones y liberaciones
-    for (int i=0; i<100; ++i) {
-        char* p = new char[128];
-        delete[] p;
-    }
-
-    // Uno sin liberar (para ver en snapshot)
-    void* leak1 = std::malloc(10*1024);
-    (void)leak1;
-
-    memprof::Tracker::instance().sendSnapshot();
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    std::cout << "Demo OK end\n";
+    std::cout << "Valor de singleInt: " << *singleInt << std::endl; // ojo: use-after-free
     return 0;
 }
