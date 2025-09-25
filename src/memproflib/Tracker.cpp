@@ -1,146 +1,113 @@
+#include <stdio.h>
 #include "Tracker.h"
-#include "SocketClient.h"
-#include <chrono>
 #include <iostream>
-#include <cstdio>
-#include <cstdlib>
+#include <ostream>
+#include <sstream>
+#include <iomanip>   // std::hex, std::dec
+#include <chrono>
+#include <string>
+#include <cstdint>   // uintptr_t
+#include "SocketClienteTest.h"
+#include <sstream>
 
-namespace memprof {
-
-Tracker& Tracker::instance() {
-    static Tracker inst;
-    return inst;
-}
-
-Tracker::Tracker() {
-    // Intentar conectar a la GUI (no bloqueante si falla)
-    sockClient_ = new SocketClient("127.0.0.1", 5555);
-    std::atexit([](){ Tracker::instance().reportAtExit(); });
-}
-
-Tracker::~Tracker() {
-    delete sockClient_;
-}
-
-ms_t Tracker::now_ms() const {
-    using namespace std::chrono;
-    return (ms_t)duration_cast<milliseconds>(
-        steady_clock::now().time_since_epoch()
-    ).count();
-}
 
 void Tracker::onAlloc(void* addr, size_t size, const char* file, int line, const char* typeName, bool isArray) {
-    if (!addr) return;
-    Allocation a;
-    a.addr = addr; a.size = size; a.isArray = isArray;
-    a.file = file ? file : "??";
-    a.line = line;
-    a.typeName = typeName ? typeName : "unknown";
-    a.timestamp_ms = now_ms();
+    using namespace std::chrono;
 
-    {
-        std::lock_guard<std::mutex> lk(m_);
-        live_.emplace(addr, a);
-        auto newCurr = currBytes_.fetch_add(size) + size;
-        size_t prevMax = maxBytes_.load();
-        while (newCurr > prevMax && !maxBytes_.compare_exchange_weak(prevMax, newCurr)) {}
-        totalAllocs_.fetch_add(1);
-    }
+    // Timestamp en milisegundos
+    auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
-    if (sockClient_ && sockClient_->connected()) {
-        char pbuf[32]; std::snprintf(pbuf, sizeof(pbuf), "%p", addr);
-        std::string j = "{\"type\":\"ALLOC\",\"addr\":\"";
-        j += pbuf;
-        j += "\",\"size\":";
-        j += std::to_string(size);
-        j += ",\"file\":\"";
-        j += a.file;
-        j += "\",\"line\":";
-        j += std::to_string(line);
-        j += ",\"typeName\":\"";
-        j += a.typeName;
-        j += "\",\"t\":";
-        j += std::to_string(a.timestamp_ms);
-        j += "}\n";
-        sockClient_->send(j);
-    }
+    std::ostringstream ss;
+    ss << "{"
+       << "\"type\":\"ALLOC\","
+       << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
+       << "\"size\":" << size << ","
+       << "\"file\":\"" << file << "\","
+       << "\"line\":" << line << ","
+       << "\"typeName\":\"" << typeName;
+    if (false) ss << "[]";
+    ss << "\","
+       << "\"t\":" << now
+       << "}\r\n";
+   std::cout << ss.str();
+
+    std::string logLine = ss.str();
+
+    // Envías el mensaje por socket
+    enviar_mensaje_socket(logLine.c_str());
+}
+void Tracker::Delete(void* addr, size_t /*size*/, const char* /*file*/, int /*line*/,
+                     const char* /*typeName*/, bool /*isArray*/) {
+   using namespace std::chrono;
+
+   // Timestamp en milisegundos desde epoch
+   const auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+   // Construir SOLO los campos requeridos
+   std::ostringstream ss;
+   ss << "{\"type\":\"FREE\","
+      << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
+      << "\"t\":" << now
+      << "}";
+
+   ss << "\r\n";
+
+   const std::string logLine = ss.str();
+
+   // Log local (debug)
+   std::cout << logLine << '\n';
+
+   // Enviar por socket
+   enviar_mensaje_socket(logLine.c_str());
 }
 
-void Tracker::onFree(void* addr, bool /*isArray*/) {
-    if (!addr) return;
-    Allocation a{};
-    bool found = false;
-    {
-        std::lock_guard<std::mutex> lk(m_);
-        auto it = live_.find(addr);
-        if (it != live_.end()) {
-            a = it->second;
-            live_.erase(it);
-            currBytes_.fetch_sub(a.size);
-            totalFrees_.fetch_add(1);
-            found = true;
-        }
+
+    void Tracker::onAllocarr(void* addr, size_t size, const char* file, int line, const char* typeName, bool isArray) {
+    using namespace std::chrono;
+
+    // Timestamp en milisegundos
+    auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+    std::ostringstream ss;
+    ss << "{"
+       << "\"type\":\"ALLOC\","
+       << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
+       << "\"size\":" << size << ","
+       << "\"file\":\"" << file << "\","
+       << "\"line\":" << line << ","
+       << "\"typeName\":\"" << typeName;
+    if (false) ss << "[]";
+    ss << "\","
+       << "\"t\":" << now
+       << "}\r\n";
+
+    std::string logLine = ss.str();
+   std::cout << ss.str();
+    // Envías el mensaje por socket
+    enviar_mensaje_socket(logLine.c_str());
     }
 
-    if (found && sockClient_ && sockClient_->connected()) {
-        char pbuf[32]; std::snprintf(pbuf, sizeof(pbuf), "%p", addr);
-        std::string j = "{\"type\":\"FREE\",\"addr\":\"";
-        j += pbuf;
-        j += "\",\"t\":";
-        j += std::to_string(now_ms());
-        j += "}\n";
-        sockClient_->send(j);
-    }
-}
+    void Tracker::Deletearr(void* addr, size_t size, const char* file, int line, const char* typeName, bool isArray) {
+   using namespace std::chrono;
 
-void Tracker::sendSnapshot() {
-    size_t curr = currBytes_.load();
-    size_t mx = maxBytes_.load();
-    size_t liveCount;
-    {
-        std::lock_guard<std::mutex> lk(m_);
-        liveCount = live_.size();
-    }
-    if (sockClient_ && sockClient_->connected()) {
-        std::string j = "{\"type\":\"SNAPSHOT\",\"t\":";
-        j += std::to_string(now_ms());
-        j += ",\"currBytes\":";
-        j += std::to_string(curr);
-        j += ",\"maxBytes\":";
-        j += std::to_string(mx);
-        j += ",\"liveCount\":";
-        j += std::to_string(liveCount);
-        j += "}\n";
-        sockClient_->send(j);
-    }
-}
+   // Timestamp en milisegundos
+   auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
-void Tracker::reportAtExit() {
-    size_t liveCount;
-    size_t leakBytes = 0;
-    {
-        std::lock_guard<std::mutex> lk(m_);
-        liveCount = live_.size();
-        for (auto &kv : live_) leakBytes += kv.second.size;
+   std::ostringstream ss;
+   ss << "{"
+      << "\"type\":\"ALLOC\","
+      << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
+      << "\"size\":" << size << ","
+      << "\"file\":\"" << file << "\","
+      << "\"line\":" << line << ","
+      << "\"typeName\":\"" << typeName;
+   if (false) ss << "[]";
+   ss << "\","
+      << "\"t\":" << now
+      << "}\r\n";
+   std::cout << ss.str();
+   std::string logLine = ss.str();
+
+   // Envías el mensaje por socket
+   enviar_mensaje_socket(logLine.c_str());
     }
-
-    std::cerr << "[memprof] TotalAllocs="<< totalAllocs_.load()
-              << " TotalFrees="<< totalFrees_.load()
-              << " MaxBytes="<< maxBytes_.load()
-              << " CurrBytes="<< currBytes_.load()
-              << " LiveAllocs="<< liveCount
-              << " LeakBytes="<< leakBytes << "\n";
-
-    if (sockClient_ && sockClient_->connected()) {
-        std::string j = "{\"type\":\"LEAK_SUMMARY\",\"t\":";
-        j += std::to_string(now_ms());
-        j += ",\"liveCount\":";
-        j += std::to_string(liveCount);
-        j += ",\"leakBytes\":";
-        j += std::to_string(leakBytes);
-        j += "}\n";
-        sockClient_->send(j);
-    }
-}
-
-} // namespace memprof

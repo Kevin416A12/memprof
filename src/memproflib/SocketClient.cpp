@@ -16,6 +16,7 @@
 namespace memprof {
 
 SocketClient::SocketClient(const std::string& host, int port) {
+    std::cout << "SocketClient::SocketClient()\n";
 #ifdef _WIN32
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) { connected_ = false; sock_ = nullptr; return; }
