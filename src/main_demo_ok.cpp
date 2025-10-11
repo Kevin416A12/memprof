@@ -10,7 +10,6 @@
 #include "memproflib/SocketClienteTest.h"
 
 int main() {
-    Tracker tracker;
     int* singleInt = new int[10000000];               // ahora pasa (file,line) desde ESTE archiv
     delete singleInt;                        // idem
 

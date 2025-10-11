@@ -49,7 +49,6 @@ void Tracker::Delete(void* addr, size_t /*size*/, const char* /*file*/, int /*li
       << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
       << "\"t\":" << now
       << "}";
-
    ss << "\r\n";
 
    const std::string logLine = ss.str();
@@ -90,24 +89,22 @@ void Tracker::Delete(void* addr, size_t /*size*/, const char* /*file*/, int /*li
     void Tracker::Deletearr(void* addr, size_t size, const char* file, int line, const char* typeName, bool isArray) {
    using namespace std::chrono;
 
-   // Timestamp en milisegundos
-   auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+   // Timestamp en milisegundos desde epoch
+   const auto now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
+   // Construir SOLO los campos requeridos
    std::ostringstream ss;
-   ss << "{"
-      << "\"type\":\"ALLOC\","
+   ss << "{\"type\":\"FREE\","
       << "\"addr\":\"0x" << std::hex << reinterpret_cast<uintptr_t>(addr) << std::dec << "\","
-      << "\"size\":" << size << ","
-      << "\"file\":\"" << file << "\","
-      << "\"line\":" << line << ","
-      << "\"typeName\":\"" << typeName;
-   if (false) ss << "[]";
-   ss << "\","
       << "\"t\":" << now
-      << "}\r\n";
-   std::cout << ss.str();
-   std::string logLine = ss.str();
+      << "}";
+   ss << "\r\n";
 
-   // Envías el mensaje por socket
+   const std::string logLine = ss.str();
+
+   // Log local (debug)
+   std::cout << logLine << '\n';
+
+   // Enviar por socket
    enviar_mensaje_socket(logLine.c_str());
-    }
+}
